@@ -36,15 +36,25 @@ class ACOZuboraGabora:
           decoded.append((op, swid+1))
         return decoded
 
-    def __init__(self, n_blades:int, times: Dict[str, Dict[str, float]], n_ants: int = 10, alpha: float = 1, beta: float = 5, rho: float = 0.8, debug=False):
+    def __init__(
+          self, 
+          n_blades:int, 
+          times: Dict[str, Dict[str, float]], 
+          n_ants: int = 10, 
+          alpha: float = 1, 
+          beta: float = 5, 
+          rho: float = 0.8, 
+          n_cicles_no_improve = 5
+    ):
         self.times = times
         self.n_blades = n_blades
-        self.debug = debug
 
         self.n_ants = n_ants
         self.alpha = alpha
         self.beta = beta
         self.rho = rho
+        
+        self.n_cicles_no_improve = n_cicles_no_improve
 
         self.pheromone_who = np.ones((self.n_blades*2,2))
         self.heuristic_who = self._make_who_heuristic()
@@ -56,24 +66,20 @@ class ACOZuboraGabora:
         self.trails_history = []
         self.best_fitness_history = []
 
-    def optimize(self, max_evaluations: int = 1000):
+    def optimize(self):
         self._initialize()
 
-        n_evaluations = 0
-        while n_evaluations < max_evaluations:
+        while not self.stop_condition():
             trails = []
             for _ in range(self.n_ants):
                 solution = self._construct_solution()
                 fitness = self._evaluate(solution)
-                n_evaluations += 1
                 trails.append((solution, fitness))
 
                 if fitness > self.best_fitness:
                     self.best_solution = solution
                     self.best_fitness = fitness
 
-            if self.debug:
-              print(f"Best fitness: {1.0/self.best_fitness:.0f}")
             self._update_pheromone(trails, self.best_fitness)
 
             self.trails_history.append(deepcopy(trails))
@@ -90,6 +96,18 @@ class ACOZuboraGabora:
         self.pheromone_history = []
         self.trails_history = []
         self.best_fitness_history = []
+
+    def stop_condition(self) -> bool:
+        """
+        Check if if the N last iterations did not improve the best solution
+        """
+        if len(self.best_fitness_history) < self.n_cicles_no_improve:
+          return False
+        
+        
+        stop_condition = np.all(np.isclose(self.best_fitness_history[-self.n_cicles_no_improve:], self.best_fitness))
+  
+        return stop_condition
 
     def _evaluate(self, solution: Tuple[List[int], List[int]]) -> float:
         """
