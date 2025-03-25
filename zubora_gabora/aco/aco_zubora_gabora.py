@@ -99,7 +99,7 @@ class ACOZuboraGabora:
 
     def stop_condition(self) -> bool:
         """
-        Check if if the N last iterations did not improve the best solution
+        Check if the N last iterations did not improve the best solution
         """
         if len(self.best_fitness_history) < self.n_cicles_no_improve:
           return False
