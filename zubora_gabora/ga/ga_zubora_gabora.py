@@ -130,7 +130,7 @@ class ZuboraGabora(benchmarks.Benchmark):
         return fitness
 
 
-class GAZuoraGabora:
+class GAZuboraGabora:
 
     @classmethod
     def zg_crossover(cls, random, candidates, args):
@@ -181,18 +181,22 @@ class GAZuoraGabora:
         self.num_elites = kwargs.get('num_elites', 1)
         self.terminator = kwargs.get('terminator', ec.terminators.no_improvement_termination)
         self.max_generations = kwargs.get('max_generations', 5)
-        self.crossover = kwargs.get('crossover', self.zg_crossover)
+        self.crossover = kwargs.get('crossover', GAZuboraGabora.zg_crossover)
         self.bin_crossover_rate = kwargs.get('bin_crossover_rate', 1)
         self.per_crossover_rate = kwargs.get('per_crossover_rate', 1)
-        self.mutation = kwargs.get('mutation', self.zg_mutation)
+        self.mutation = kwargs.get('mutation', GAZuboraGabora.zg_mutation)
         self.bin_mutation_rate = kwargs.get('bin_mutation_rate', 0.1)
         self.per_mutation_rate = kwargs.get('per_mutation_rate', 0.3)
         self.best_fitness_history = []
         self.solutions_history = []
+        self.num_evaluations = 0
+        self.num_generations = 0
     
     def _initialize(self):
         self.best_fitness_history = []
         self.solutions_history = []
+        self.num_evaluations = 0
+        self.num_generations = 0
 
     def zg_decoder(self, candidate):
         """Return the decoded candidate."""
@@ -215,7 +219,7 @@ class GAZuoraGabora:
         """Observer to track best fitness and diversity."""
         best = max(population).fitness
         self.best_fitness_history.append(best)
-        self.solutions_history.append([deepcopy(i.candidate) for i in population])
+        self.solutions_history.append([(deepcopy(i.candidate),i.fitness) for i in population])
 
     def run(self, seed=None):
         rand = Random()
@@ -243,5 +247,7 @@ class GAZuoraGabora:
                               per_crossover_rate=self.per_crossover_rate,
                               bin_mutation_rate=self.bin_mutation_rate,
                               per_mutation_rate=self.per_mutation_rate)
+        self.num_generations = ga.num_generations
+        self.num_evaluations = ga.num_evaluations
         best = max(final_pop)
         return best.candidate, best.fitness

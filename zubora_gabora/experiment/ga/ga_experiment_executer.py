@@ -3,50 +3,44 @@ import shutil
 from os import makedirs
 from os.path import isdir
 from typing import Dict, Tuple
+from inspyred import ec
 
 from zubora_gabora.ga.ga_zubora_gabora import GAZuboraGabora
 
 
-class ACOExperimentExecuter:
+class GAExperimentExecuter:
     
     def __init__(self, data_path="data/datset.csv"):
         self.dataset = pd.read_csv(data_path)
 
-    def run_single_experiment(self, experiment_id: int, alpha=0.5, beta=1.0, rho=0.75, n_cicles_no_improve=50) -> pd.DataFrame:
+    def run_single_experiment(self, experiment_id: int, **kwargs) -> pd.DataFrame:
         """
-        Runs an experiment with the given ACO algorithm and dataset.
+        Runs an experiment with the given GA algorithm and dataset.
         """
-        blades, times = self._read_data(experiment_id)
-        aco = GAZuboraGabora(
-            n_blades=blades,
-            times=times,
-            alpha=alpha,
-            beta=beta,
-            rho=rho,
-            n_cicles_no_improve=n_cicles_no_improve
-        )
-        aco.optimize()
-        return aco
+        swords, zubora, gabora = self._read_data(experiment_id)
+        ga = GAZuboraGabora(swords,zubora,gabora,**kwargs)
+        candidate, fitness = ga.run()
+        return ga, candidate, fitness
     
-    def run_repeated_experiment(self, experiment_id: int, n_repeat=31, alpha=0.5, beta=1.0, rho=0.75, n_cicles_no_improve=50) -> pd.DataFrame:
+    def run_repeated_experiment(self, experiment_id: int, n_repeat=31, **kwargs) -> pd.DataFrame:
         """
-        Runs an experiment with the given ACO algorithm and dataset n_repeat times.
-        Returns a DataFrame with the fitness and number of cicles of each run.
+        Runs an experiment with the given GA algorithm and dataset n_repeat times.
+        Returns a DataFrame with the fitness and number of generations of each run.
         """ 
         results = [] 
         for i in range(n_repeat):
             print(f"Running experiment: dataset {experiment_id} - run {i+1}/{n_repeat}")
-            aco = self.run_single_experiment(experiment_id, alpha, beta, rho, n_cicles_no_improve)
+            ga, candidate, fitness = self.run_single_experiment(experiment_id, **kwargs)
             actual_result = {
                 "run": i,
-                "fitness": 1.0/aco.best_fitness,
-                "cicles": len(aco.best_fitness_history)
+                "fitness": fitness,
+                "n_evaluations": ga.num_evaluations
             }
             results.append(actual_result)
 
         return pd.DataFrame(results)
     
-    def run_all_experiments(self, experiment_folder: str, overwrite=False, n_repeat=31, alpha=0.5, beta=1.0, rho=0.75, n_cicles_no_improve=50):
+    def run_all_experiments(self, experiment_folder: str, overwrite=False, n_repeat=31):
         """
         Runs all experiments in the dataset n_repeat times.
         Returns a DataFrame with the fitness and number of cicles of each run.
@@ -61,8 +55,15 @@ class ACOExperimentExecuter:
         makedirs(experiment_folder)
 
         for i in self.dataset["id"].to_list():
-            print(f"Running experiment {i} (n_blades: {self.dataset.query(f'id == {i}')['N'].iloc[0]})")
-            actual_result = self.run_repeated_experiment(i, n_repeat, alpha, beta, rho, n_cicles_no_improve)
+            params = self._calculate_params(i)
+
+            print(f"Running experiment {i} (n_blades: {self.dataset.query(f'id == {i}')['N'].iloc[0]}) with params: {params}")
+            actual_result = self.run_repeated_experiment(
+                experiment_id=i, 
+                n_repeat=n_repeat,
+                **params
+            )
+            
             actual_result["experiment_id"] = i
             actual_result.to_csv(f"{experiment_folder}/experiment_{i}.csv", index=False)
             print(f"Experiment {i} finished and saved.")
@@ -75,19 +76,36 @@ class ACOExperimentExecuter:
             raise ValueError(f"Experiment with id {experiment_id} not found.")
 
         n_blades = data["N"]
-        times = {
-            "Zu": {
-                "F": data["forging_zubora"],
-                "G": data["grinding_zubora"]
-            },
-            "Ga": {
-                "F": data["forging_gabora"],
-                "G": data["grinding_gabora"]
-            }
-        }
-        return n_blades, times
+        zubora = (data["forging_zubora"], data["grinding_zubora"])
+        gabora = (data["forging_gabora"], data["grinding_gabora"])
+        return n_blades, zubora, gabora
         
+    def _calculate_params(self, experiment_id: int) -> Dict[str, float]:
+        """
+        Calculates the parameters for the GA algorithm based on the dataset.
+        """
+        fixed = {
+            "selection": ec.selectors.tournament_selection,
+            "tournament_size": 2,
+            "replacer": ec.replacers.generational_replacement,
+            "num_elites": 1,
+            "terminator": ec.terminators.no_improvement_termination,
+            "max_generations": 20,
+            "crossover": GAZuboraGabora.zg_crossover,
+            "bin_crossover_rate": 1,
+            "per_crossover_rate": 1,
+            "mutation": GAZuboraGabora.zg_mutation,
+            "bin_mutation_rate": 0.1,
+            "per_mutation_rate": 0.3
+        }
+        data = self.dataset.query(f"id == {experiment_id}").iloc[0]
+        if data["N"] < 50:
+            fixed["pop_size"] = 20
+        elif data["N"] < 100:
+            fixed["pop_size"] = 50
+        else:
+            fixed["pop_size"] = 100
 
-
+        return fixed
 
 
