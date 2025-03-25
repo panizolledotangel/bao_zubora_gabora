@@ -55,6 +55,7 @@ class ACOZuboraGabora:
         self.rho = rho
         
         self.n_cicles_no_improve = n_cicles_no_improve
+        self.n_evaluations = 0
 
         self.pheromone_who = np.ones((self.n_blades*2,2))
         self.heuristic_who = self._make_who_heuristic()
@@ -62,7 +63,6 @@ class ACOZuboraGabora:
         self.best_solution = None
         self.best_fitness = 0.0
 
-        self.pheromone_history = []
         self.trails_history = []
         self.best_fitness_history = []
 
@@ -93,7 +93,8 @@ class ACOZuboraGabora:
         self.best_solution = None
         self.best_fitness = 0.0
 
-        self.pheromone_history = []
+        self.n_evaluations = 0
+
         self.trails_history = []
         self.best_fitness_history = []
 
@@ -113,6 +114,8 @@ class ACOZuboraGabora:
         """
         Calculates the inverse end time of the sword that is forged last
         """
+        self.n_evaluations += 1
+
         who, order = solution
         _, times = self._simulate_forging(who, order)
         end_time = max([sword["G"][1] for sword in times])
@@ -252,8 +255,7 @@ class ACOZuboraGabora:
         return heuristic
 
     def _update_pheromone(self, trails: List[Tuple[Tuple[List[int], List[int]], float]], best_fitness):
-        self.pheromone_history.append((self.pheromone_who.copy(), self.pheromone_order.copy()))
-
+        
         evaporation = 1 - self.rho
         self.pheromone_who *= evaporation
         self.pheromone_order *= evaporation
