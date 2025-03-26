@@ -130,7 +130,7 @@ class ZuboraGabora(benchmarks.Benchmark):
         return fitness
 
 
-class GAZuoraGabora:
+class GAZuboraGabora:
 
     @classmethod
     def zg_crossover(cls, random, candidates, args):
@@ -171,6 +171,24 @@ class GAZuoraGabora:
 
         offspring = [schedule + order for schedule, order in zip(schedule_offspring, order_offspring)]
         return offspring
+    
+    @classmethod
+    def zg_repair(cls, random, candidates, args):
+        """Return the repaired solution of the given candidate."""
+        tasks = args['num_tasks']
+        schedules = [cand[:tasks] for cand in candidates]
+        orders = [cand[tasks:] for cand in candidates]
+        
+        order_offspring = deepcopy(orders)
+        # Traverse order by pairs, and if the second task (grinding)
+        # is before the first (forging), swap them
+        for order in order_offspring:
+            for i in range(0,len(order),2):
+                if order[i] > order[i+1]:
+                    order[i], order[i+1] = order[i+1], order[i]
+
+        offspring = [schedule + order for schedule, order in zip(schedules, order_offspring)]
+        return offspring
 
     def __init__(self, swords, zubora, gabora, **kwargs):
         self.problem = ZuboraGabora(swords, zubora, gabora)
@@ -180,19 +198,24 @@ class GAZuoraGabora:
         self.replacer = kwargs.get('replacer', ec.replacers.generational_replacement)
         self.num_elites = kwargs.get('num_elites', 1)
         self.terminator = kwargs.get('terminator', ec.terminators.no_improvement_termination)
-        self.max_generations = kwargs.get('max_generations', 5)
-        self.crossover = kwargs.get('crossover', self.zg_crossover)
+        self.max_generations = kwargs.get('max_generations', 20)
+        self.crossover = kwargs.get('crossover', GAZuboraGabora.zg_crossover)
         self.bin_crossover_rate = kwargs.get('bin_crossover_rate', 1)
         self.per_crossover_rate = kwargs.get('per_crossover_rate', 1)
-        self.mutation = kwargs.get('mutation', self.zg_mutation)
+        self.mutation = kwargs.get('mutation', GAZuboraGabora.zg_mutation)
         self.bin_mutation_rate = kwargs.get('bin_mutation_rate', 0.1)
         self.per_mutation_rate = kwargs.get('per_mutation_rate', 0.3)
+        self.constraint_handler = kwargs.get('constraint_handler', "repair")
         self.best_fitness_history = []
         self.solutions_history = []
+        self.num_evaluations = 0
+        self.num_generations = 0
     
     def _initialize(self):
         self.best_fitness_history = []
         self.solutions_history = []
+        self.num_evaluations = 0
+        self.num_generations = 0
 
     def zg_decoder(self, candidate):
         """Return the decoded candidate."""
@@ -215,7 +238,7 @@ class GAZuoraGabora:
         """Observer to track best fitness and diversity."""
         best = max(population).fitness
         self.best_fitness_history.append(best)
-        self.solutions_history.append([deepcopy(i.candidate) for i in population])
+        self.solutions_history.append([(deepcopy(i.candidate),i.fitness) for i in population])
 
     def run(self, seed=None):
         rand = Random()
@@ -228,7 +251,10 @@ class GAZuoraGabora:
         ga.observer = self.history_observer
         ga.selector = self.selector
         ga.replacer = self.replacer
-        ga.variator = [self.crossover, self.mutation]
+        if self.constraint_handler == "repair":
+            ga.variator = [self.crossover, self.mutation, GAZuboraGabora.zg_repair]
+        else:
+            ga.variator = [self.crossover, self.mutation]
         final_pop = ga.evolve(generator=self.problem.generator,
                               evaluator=self.problem.evaluator,
                               pop_size=self.pop_size,
@@ -243,5 +269,7 @@ class GAZuoraGabora:
                               per_crossover_rate=self.per_crossover_rate,
                               bin_mutation_rate=self.bin_mutation_rate,
                               per_mutation_rate=self.per_mutation_rate)
+        self.num_generations = ga.num_generations
+        self.num_evaluations = ga.num_evaluations
         best = max(final_pop)
         return best.candidate, best.fitness

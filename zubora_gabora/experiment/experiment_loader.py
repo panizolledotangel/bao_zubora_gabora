@@ -3,7 +3,7 @@ from os import listdir
 from os.path import isfile, join
 
 
-class ACOExperimentLoader:
+class ExperimentLoader:
 
     def __init__(self, experiment_folder: str):
         self.experiment_folder = experiment_folder
